@@ -34,6 +34,16 @@ app.use('/api/games', require('./routes/games'));
 // create HTTP server for Socket.IO
 const server = http.createServer(app);
 
+const allowedOrigins = [
+  'https://ocelot-cubs-client-side-1.vercel.app', // Your Vercel domain
+  'http://localhost:3000',
+];
+
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true
+}));
+
 // socket.io setup
 const io = new Server(server, {
   cors: {
