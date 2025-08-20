@@ -37,7 +37,10 @@ const server = http.createServer(app);
 // socket.io setup
 const io = new Server(server, {
   cors: {
-    origin: 'http://localhost:3000',
+    origin:[ 
+    'http://localhost:3000',
+    'https://ocelot-cubs-client-side-1.vercel.app' 
+    ],
     methods: ['GET', 'POST'],
   },
 });
@@ -90,6 +93,14 @@ io.on('connection', (socket) => {
     console.log('User disconnected:', socket.id);
   });
 });
+
+
+// Root route (to confirm backend is alive)
+app.get("/", (req, res) => {
+  res.send("Ocelot Cubs backend is running 🚀");
+});
+
+
 
 // start server
 server.listen(PORT, () => {
