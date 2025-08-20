@@ -91,6 +91,12 @@ io.on('connection', (socket) => {
   });
 });
 
+// Root route (to confirm backend is alive)
+app.get("/", (req, res) => {
+  res.send("Ocelot Cubs backend is running 🚀");
+});
+
+
 // start server
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
