@@ -37,7 +37,7 @@ const server = http.createServer(app);
 // socket.io setup
 const io = new Server(server, {
   cors: {
-    origin:'ocelot-cubs-client-side-1.vercel.app',
+    origin:'https://ocelot-cubs-client-side-1.vercel.app',
     methods: ['GET', 'POST'],
   },
 });
