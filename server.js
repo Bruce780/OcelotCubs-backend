@@ -71,7 +71,7 @@ io.on('connection', (socket) => {
       await newMessage.save();
       console.log('Message saved to database:', newMessage);
 
-      // Emit to all clients with consistent format (same as frontend expects)
+      // Emitting to all clients with consistent format 
       const messageToEmit = {
         username: data.username,
         message: data.message,
