@@ -24,35 +24,38 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('MongoDB connection error:', err));
 
-app.use(cors());
+// CORS configuration - Define allowed origins
+const allowedOrigins = [
+  'https://ocelot-cubs-client-side-1.vercel.app', // Your Vercel domain
+  'http://localhost:3000', // For development
+];
+
+// Apply CORS middleware
+app.use(cors({
+  origin: allowedOrigins,
+  credentials: true
+}));
+
 app.use(express.json());
 
 // routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/games', require('./routes/games'));
 
+// Root route (to confirm backend is alive)
+app.get("/", (req, res) => {
+  res.send("Ocelot Cubs backend is running");
+});
+
 // create HTTP server for Socket.IO
 const server = http.createServer(app);
 
-const allowedOrigins = [
-  'https://ocelot-cubs-client-side-1.vercel.app', // Your Vercel domain
-  'http://localhost:3000',
-];
-
-app.use(cors({
-  origin: allowedOrigins,
-  credentials: true
-}));
-
 // socket.io setup
 const io = new Server(server, {
-    origin:[ 
-    'http://localhost:3000',
-    'https://ocelot-cubs-client-side-1.vercel.app' 
-    ],
   cors: {
-    origin:'https://ocelot-cubs-client-side-1.vercel.app',
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
+    credentials: true
   },
 });
 
@@ -104,11 +107,6 @@ io.on('connection', (socket) => {
     console.log('User disconnected:', socket.id);
   });
 });
-// Root route (to confirm backend is alive)
-app.get("/", (req, res) => {
-  res.send("Ocelot Cubs backend is running ");
-});
-
 
 // start server
 server.listen(PORT, () => {
