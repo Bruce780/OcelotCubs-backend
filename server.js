@@ -4,6 +4,8 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const http = require('http');
+const session = require('express-session');
+const MongoStore = require('connect-mongo');
 const { Server } = require('socket.io');
 
 // Models
@@ -38,6 +40,105 @@ app.use(cors({
 
 app.use(express.json());
 
+// Session configuration
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'your-super-secret-key-change-this', // Add to .env
+  resave: false,
+  saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: MONGO_URI,
+    collectionName: 'sessions'
+  }),
+  cookie: {
+    secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+    httpOnly: true,
+    maxAge: 30 * 60 * 1000, // 30 minutes
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax' // For cross-origin requests
+  }
+}));
+
+// Session management endpoints
+app.post('/api/logout', (req, res) => {
+  console.log('Logout request received');
+  
+  if (req.session) {
+    // Destroy the session
+    req.session.destroy((err) => {
+      if (err) {
+        console.error('Session destroy error:', err);
+        return res.status(500).json({ error: 'Could not log out properly' });
+      }
+      
+      // Clear the session cookie
+      res.clearCookie('connect.sid');
+      console.log('Session destroyed successfully');
+      res.json({ message: 'Logged out successfully' });
+    });
+  } else {
+    res.json({ message: 'No active session' });
+  }
+});
+
+app.post('/api/heartbeat', (req, res) => {
+  if (req.session && req.session.user) {
+    // Update session activity
+    req.session.lastActivity = new Date().toISOString();
+    req.session.touch(); // Refresh session expiry
+    
+    res.json({ 
+      status: 'active',
+      lastActivity: req.session.lastActivity
+    });
+  } else {
+    res.status(401).json({ error: 'No active session' });
+  }
+});
+
+// Check session status endpoint
+app.get('/api/session-status', (req, res) => {
+  if (req.session && req.session.user) {
+    res.json({
+      isLoggedIn: true,
+      user: req.session.user,
+      lastActivity: req.session.lastActivity
+    });
+  } else {
+    res.json({ isLoggedIn: false });
+  }
+});
+
+// Session creation endpoint (you'll call this from login)
+app.post('/api/create-session', (req, res) => {
+  const { userId, username } = req.body;
+  
+  if (!userId || !username) {
+    return res.status(400).json({ error: 'Missing user data' });
+  }
+  
+  // Create session
+  req.session.user = {
+    id: userId,
+    username: username,
+    loginTime: new Date().toISOString()
+  };
+  req.session.lastActivity = new Date().toISOString();
+  
+  console.log('Session created for user:', username);
+  res.json({ 
+    message: 'Session created successfully',
+    sessionId: req.sessionID
+  });
+});
+
+// Middleware to check if user is authenticated for protected routes
+const requireAuth = (req, res, next) => {
+  if (req.session && req.session.user) {
+    next();
+  } else {
+    res.status(401).json({ error: 'Authentication required' });
+  }
+};
+
 // routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/games', require('./routes/games'));
@@ -50,7 +151,7 @@ app.get("/", (req, res) => {
 // create HTTP server for Socket.IO
 const server = http.createServer(app);
 
-// socket.io setup
+// socket.io setup with session support
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
@@ -59,8 +160,36 @@ const io = new Server(server, {
   },
 });
 
+// Session middleware for Socket.IO
+const sessionMiddleware = session({
+  secret: process.env.SESSION_SECRET || 'your-super-secret-key-change-this',
+  resave: false,
+  saveUninitialized: false,
+  store: MongoStore.create({
+    mongoUrl: MONGO_URI,
+    collectionName: 'sessions'
+  }),
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true,
+    maxAge: 30 * 60 * 1000,
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
+  }
+});
+
+// Use session middleware with Socket.IO
+io.use((socket, next) => {
+  sessionMiddleware(socket.request, {}, next);
+});
+
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
+  
+  // Access session data
+  const session = socket.request.session;
+  if (session && session.user) {
+    console.log('Authenticated user connected:', session.user.username);
+  }
 
   socket.on('sendMessage', async (data) => {
     console.log('Message received:', data);
@@ -70,6 +199,12 @@ io.on('connection', (socket) => {
       console.warn("Message missing username or message:", data);
       return;
     }
+
+    // Optional: Verify user is authenticated for chat
+    // if (!session || !session.user) {
+    //   console.warn("Unauthenticated user trying to send message");
+    //   return;
+    // }
 
     try {
       // Create timestamp string for consistent format
@@ -105,8 +240,18 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.id);
+    
+    // Optional: Clean up user session on disconnect
+    if (session && session.user) {
+      console.log('Authenticated user disconnected:', session.user.username);
+    }
   });
 });
+
+// Clean up expired sessions periodically
+setInterval(() => {
+  console.log('Cleaning up expired sessions...');
+}, 60 * 60 * 1000); // Every hour
 
 // start server
 server.listen(PORT, () => {
