@@ -107,12 +107,18 @@ app.get('/api/session-status', (req, res) => {
   }
 });
 
-// Session creation endpoint (you'll call this from login)
+// Session creation endpoint (called from login)
 app.post('/api/create-session', (req, res) => {
+  console.log('Session creation request received:', req.body);
+  
   const { userId, username } = req.body;
   
   if (!userId || !username) {
-    return res.status(400).json({ error: 'Missing user data' });
+    console.log('Missing user data - userId:', userId, 'username:', username);
+    return res.status(400).json({ 
+      error: 'Missing user data',
+      received: { userId, username }
+    });
   }
   
   // Create session
@@ -123,10 +129,12 @@ app.post('/api/create-session', (req, res) => {
   };
   req.session.lastActivity = new Date().toISOString();
   
-  console.log('Session created for user:', username);
+  console.log('Session created successfully for user:', username, 'Session ID:', req.sessionID);
+  
   res.json({ 
     message: 'Session created successfully',
-    sessionId: req.sessionID
+    sessionId: req.sessionID,
+    user: req.session.user
   });
 });
 
